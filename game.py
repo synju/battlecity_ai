@@ -9,7 +9,12 @@ from map import Map
 
 
 class Game:
-	def __init__(self):
+	def __init__(self, headless=False, agent1_file=None, agent2_file=None, max_iterations=1):
+		self.headless = headless
+		self.agent1_file = agent1_file or "policies/agent1_policy_merged.pth"
+		self.agent2_file = agent2_file or "policies/agent2_policy_merged.pth"
+		self.iteration_limit = max_iterations if self.headless else None
+
 		# Time
 		self.timeElapsed = 0
 		self.start_time = time.time()
@@ -66,8 +71,9 @@ class Game:
 		pygame.init()
 
 		# Initialize Window
-		self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
-		pygame.display.set_caption("Battle City Clone")
+		if not self.headless:
+			self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
+			pygame.display.set_caption("Battle City Clone")
 
 	def close_application(self):
 		self.running = False
@@ -105,15 +111,24 @@ class Game:
 		return state
 
 	def save_and_load_models(self):
-		# Save models for the current iteration
-		self.agent1.save_model("policies/agent1_policy.pth")
-		self.agent2.save_model("policies/agent2_policy.pth")
+		if self.headless:
+			process_id = os.getpid()
+			self.agent1_file = f"policies/agent1_policy_{process_id}.pth"
+			self.agent2_file = f"policies/agent2_policy_{process_id}.pth"
 
-		# Load models for the next iteration
-		self.agent1.load_model("policies/agent1_policy.pth")
-		self.agent2.load_model("policies/agent2_policy.pth")
+			self.agent1.save_model(self.agent1_file)
+			self.agent2.save_model(self.agent2_file)
+
+			self.agent1.load_model(self.agent1_file)
+			self.agent2.load_model(self.agent2_file)
 
 	def init_game(self):
+		# Use merged as starting model if they exist
+		if os.path.exists("policies/agent1_policy_merged.pth"):
+			self.agent1_file = "policies/agent1_policy_merged.pth"
+		if os.path.exists("policies/agent2_policy_merged.pth"):
+			self.agent2_file = "policies/agent2_policy_merged.pth"
+
 		# Setup Tanks
 		self.start_time = time.time()  # Reset start time when game starts
 		self.map = Map(self, os.path.join(os.path.dirname(__file__), "stages/stage0.txt"))
@@ -135,8 +150,8 @@ class Game:
 		self.agent1.opponent = self.tank2
 		self.agent2.opponent = self.tank1
 
-		self.agent1.setup_model(0.001, "agent1_policy.pth")
-		self.agent2.setup_model(0.002, "agent2_policy.pth")
+		self.agent1.setup_model(0.001, self.agent1_file)
+		self.agent2.setup_model(0.002, self.agent2_file)
 
 		# Game Variables
 		self.round_has_ended = False
@@ -153,14 +168,16 @@ class Game:
 			agent.train()
 
 	def round_over(self):
-		if self.round_has_ended:
-			return  # Prevent multiple calls per round
+		if self.headless:
+			if self.round_has_ended:
+				return  # Prevent multiple calls per round
 
-		self.round_has_ended = True  # Lock
-		self.training_cycle_count += 1
-		if self.training_cycle_count >= 5:
-			self.train()
-			self.training_cycle_count = 0
+			self.round_has_ended = True  # Lock
+			self.training_cycle_count += 1
+			if self.training_cycle_count >= 5:
+				self.train()
+				self.training_cycle_count = 0
+
 		self.init_game()
 
 	def check_done(self):
@@ -198,17 +215,18 @@ class Game:
 			self.round_over()
 
 	def draw(self):
-		# Clear Screen
-		self.screen.fill((0, 0, 0))
+		if not self.headless:
+			# Clear Screen
+			self.screen.fill((0, 0, 0))
 
-		# Draw the map
-		self.map.draw()
+			# Draw the map
+			self.map.draw()
 
-		# Decision Points: small white dots
-		# self.draw_points()
+			# Decision Points: small white dots
+			# self.draw_points()
 
-		# Update the display
-		pygame.display.flip()
+			# Update the display
+			pygame.display.flip()
 
 	def draw_points(self):
 		font = pygame.font.SysFont(None, 16)  # or any size you want
@@ -224,12 +242,15 @@ class Game:
 
 	# Main game loop
 	def main(self):
-		while self.running:
+		while self.running and (self.iteration_limit is None or self.iteration < self.iteration_limit):
 			self.timeElapsed = round(time.time() - self.start_time)
 			self.update()
 			self.draw()
-			# print(self.timeElapsed)
-			self.clock.tick(60)
+			self.clock.tick(self.FPS)
+
+		# Automatically stop headless mode after iteration limit is reached
+		if self.headless:
+			self.running = False
 
 
 if __name__ == "__main__":

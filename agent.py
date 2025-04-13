@@ -182,7 +182,7 @@ class Agent:
 			pygame.K_DOWN: False,
 			pygame.K_LEFT: False,
 			pygame.K_RIGHT: False,
-			#pygame.K_SPACE: False,
+			# pygame.K_SPACE: False,
 		}
 		if current_action == 0:  # UP
 			keys[pygame.K_UP] = True
@@ -192,8 +192,8 @@ class Agent:
 			keys[pygame.K_LEFT] = True
 		elif current_action == 3:  # RIGHT
 			keys[pygame.K_RIGHT] = True
-		#elif current_action == 4:  # SHOOT
-			#keys[pygame.K_SPACE] = True
+		# elif current_action == 4:  # SHOOT
+		# keys[pygame.K_SPACE] = True
 		return keys
 
 	def check_done(self):
@@ -288,8 +288,10 @@ class Agent:
 		self.memory = []
 
 	def update(self):
-		# End round if out of time or if tank or eagle is destroyed
+		# ✅ Always check for game end
 		done = self.game.check_done()
+
+		# 🧠 Only decide if a new decision is needed
 		if self.tank.awaiting_decision:
 			# Decision time
 			current_state = self.game.get_game_state()
@@ -301,13 +303,18 @@ class Agent:
 			self.tank.awaiting_decision = False  # This is where it stops waiting for a decision
 			self.tank.most_recent_decision_point = self.tank.temp_decision_point
 
-			# Store transition for learning
-			next_state = self.game.get_game_state()
-			self.store_transition(current_state, self.current_action, 0.0, next_state, done)
+			# 🛑 Skip storing transitions if not headless (i.e. visual testing mode)
+			if self.game.headless:
+				next_state = self.game.get_game_state()
+				self.store_transition(current_state, self.current_action, 0.0, next_state, done)
 
-		# Continue moving with stored keys
+		# 🚗 Continue movement
 		if not self.tank.awaiting_decision and self.tank.active_keys:
 			self.tank.perform_action(self.tank.active_keys, self.opponent)
+
+		# 🧼 End game if done
+		if done:
+			self.game.round_over()
 
 	def calculate_time_bonus(self, time_elapsed):
 		base_reward = 150.0
