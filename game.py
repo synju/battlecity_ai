@@ -1,6 +1,7 @@
-import pygame
 import sys
 import os
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+import pygame
 import time
 
 from agent import Agent
@@ -81,7 +82,6 @@ class Game:
 		sys.exit()
 
 	def print_agent_points(self):
-		self.iteration += 1
 		print(f"Iteration: {self.iteration}, Agent 1: {self.agent_points['agent_1']}, Agent 2: {self.agent_points['agent_2']}")
 
 	def get_game_state(self):
@@ -153,9 +153,6 @@ class Game:
 		self.agent1.setup_model(0.001, self.agent1_file)
 		self.agent2.setup_model(0.002, self.agent2_file)
 
-		# Game Variables
-		self.round_has_ended = False
-
 		# Save and Load Models
 		self.save_and_load_models()
 
@@ -163,7 +160,8 @@ class Game:
 		self.initialized = True
 
 	def train(self):
-		self.print_agent_points()
+		self.iteration += 1
+		#self.print_agent_points()
 		for agent in self.agents:
 			agent.train()
 
@@ -191,6 +189,10 @@ class Game:
 		# Initialize game if not initialized yet.
 		if not self.initialized:
 			self.init_game()
+
+		# Reset once at the start of the new round
+		if self.round_has_ended:
+			self.round_has_ended = False
 
 		# Handle Key Presses and Events
 		for event in pygame.event.get():

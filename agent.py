@@ -196,10 +196,6 @@ class Agent:
 		# keys[pygame.K_SPACE] = True
 		return keys
 
-	def check_done(self):
-		# Define logic to determine if the game/reset condition is reached
-		return self.tank.destroyed or self.tank.eagle["destroyed"] or self.opponent.destroyed or self.opponent.eagle["destroyed"] or self.game.timeElapsed >= self.game.max_time
-
 	def store_transition(self, state, action, reward, next_state, done):
 		# Preprocess states before storing
 		processed_state = self.preprocess_state(state).numpy()

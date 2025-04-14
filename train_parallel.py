@@ -14,7 +14,7 @@ def run_game_instance(instance_id, num_iterations=1):
 
 if __name__ == "__main__":
 	num_instances = 50
-	iterations_per_batch = 60
+	iterations_per_batch = 5
 	total_iterations = 300
 
 	batches = total_iterations // iterations_per_batch

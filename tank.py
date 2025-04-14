@@ -1,6 +1,6 @@
 import pygame
 
-from battlecity.game.decision_point import DecisionPoint
+from decision_point import DecisionPoint
 from bullet import Bullet
 
 
