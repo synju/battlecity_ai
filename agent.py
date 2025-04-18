@@ -13,8 +13,9 @@ class Agent:
 		self.agent_id = agent_id
 		self.tank = None
 		self.opponent = None
-		self.current_action = None  # Initialize the current action
-		self.current_keys = None  # Initialize the current keys
+		self.previous_state = None
+		self.current_action = None
+		self.current_keys = None
 		self.cycle_counter = 0  # Add a cycle counter
 		self.decision_interval = 4  # Number of cycles between decisions
 
@@ -208,9 +209,9 @@ class Agent:
 		points = 0.0
 
 		# Phase 1: movement training (Normalized Distance)
-		dist = self.get_distance_to_opponent()
+		dist = self.get_distance()
 		normalized = math.exp(-dist / 150.0)
-		points += normalized * 10.0
+		points += normalized * 2.0  # Was 10.0, reduced since we already reward during match
 
 		# Reward for destroying the opponent
 		# if self.opponent.destroyed:
@@ -240,6 +241,11 @@ class Agent:
 
 		for i in range(min(len(self.memory), len(rewards))):
 			self.memory[i] = (*self.memory[i][:2], rewards[i], *self.memory[i][3:])
+
+	def compute_step_reward(self, prev_state, next_state):
+		old_dist = self.get_distance(prev_state)
+		new_dist = self.get_distance(next_state)
+		return (old_dist - new_dist) * 0.1
 
 	def train(self, batch_size=32, clip_epsilon=0.2, epochs=20):
 		# Compute Rewards
@@ -284,31 +290,39 @@ class Agent:
 		self.memory = []
 
 	def update(self):
-		# ✅ Always check for game end
 		done = self.game.check_done()
 
-		# 🧠 Only decide if a new decision is needed
 		if self.tank.awaiting_decision:
-			# Decision time
-			current_state = self.game.get_game_state()
-			self.current_action = self.decide_action(current_state)
-			self.current_keys = self.map_action_to_keys(self.current_action)
+			# Decide what to do
+			state = self.game.get_game_state()
+			action = self.decide_action(state)
+			keys = self.map_action_to_keys(action)
 
-			# Save this as "active movement" and start moving
-			self.tank.active_keys = self.current_keys
-			self.tank.awaiting_decision = False  # This is where it stops waiting for a decision
+			self.current_action = action
+			self.current_keys = keys
+			self.previous_state = state
+
+			self.tank.active_keys = keys
+			self.tank.awaiting_decision = False
 			self.tank.most_recent_decision_point = self.tank.temp_decision_point
 
-			# 🛑 Skip storing transitions if not headless (i.e. visual testing mode)
+		else:
 			if self.game.headless:
+				# Compute reward based on distance improvement
 				next_state = self.game.get_game_state()
-				self.store_transition(current_state, self.current_action, 0.0, next_state, done)
+				old_dist = self.get_distance(self.previous_state)
+				new_dist = self.get_distance(next_state)
+				reward = self.compute_step_reward(self.previous_state, next_state)
 
-		# 🚗 Continue movement
+				done = self.game.check_done()
+				self.store_transition(self.previous_state, self.current_action, reward, next_state, done)
+
+			self.tank.awaiting_decision = True  # Request next decision
+
+		# Continue current movement
 		if not self.tank.awaiting_decision and self.tank.active_keys:
 			self.tank.perform_action(self.tank.active_keys, self.opponent)
 
-		# 🧼 End game if done
 		if done:
 			self.game.round_over()
 
@@ -316,12 +330,18 @@ class Agent:
 		base_reward = 150.0
 		return max(0.0, base_reward - 5.0 * time_elapsed)
 
-	def get_distance_to_opponent(self):
-		t1_center_x = self.tank.x + self.tank.width / 2
-		t1_center_y = self.tank.y + self.tank.height / 2
-		t2_center_x = self.opponent.x + self.opponent.width / 2
-		t2_center_y = self.opponent.y + self.opponent.height / 2
+	def get_distance(self, state=None):
+		if state:
+			tank_x = state["self"]["x"] + state["self"]["width"] / 2
+			tank_y = state["self"]["y"] + state["self"]["height"] / 2
+			opp_x = state["opponent"]["x"] + state["opponent"]["width"] / 2
+			opp_y = state["opponent"]["y"] + state["opponent"]["height"] / 2
+		else:
+			tank_x = self.tank.x + self.tank.width / 2
+			tank_y = self.tank.y + self.tank.height / 2
+			opp_x = self.opponent.x + self.opponent.width / 2
+			opp_y = self.opponent.y + self.opponent.height / 2
 
-		dx = t1_center_x - t2_center_x
-		dy = t1_center_y - t2_center_y
+		dx = tank_x - opp_x
+		dy = tank_y - opp_y
 		return (dx ** 2 + dy ** 2) ** 0.5
