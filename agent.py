@@ -44,7 +44,7 @@ class Agent:
 		self.policy_net.eval()
 
 	def setup_model(self, lr=0.001, model_filename=None):
-		tank_features = (8 + (50 * 2)) * 2  # 8 attributes + bullet attributes (50*2) per tank
+		tank_features = (19 + (50 * 2)) * 2  # 19 attributes + bullet attributes (50*2) per tank
 		eagle_features = 3 * self.max_eagles  # 3 attributes per eagle
 		brick_features = 3 * self.max_bricks  # 3 attributes per brick
 		steel_wall_features = 2 * self.max_steel_walls  # 2 attributes per steel_wall
@@ -67,14 +67,18 @@ class Agent:
 		timeElapsed = state["timeElapsed"]
 
 		tank1_features = [
-			tank1_state["x"] / self.game.SCREEN_WIDTH,
-			tank1_state["y"] / self.game.SCREEN_HEIGHT,
+			tank1_state["x_norm"],
+			tank1_state["y_norm"],
+			tank1_state["rel_dx"],
+			tank1_state["rel_dy"],
 			int(tank1_state["direction"] == "UP"),
 			int(tank1_state["direction"] == "DOWN"),
 			int(tank1_state["direction"] == "LEFT"),
 			int(tank1_state["direction"] == "RIGHT"),
 			tank1_state["distance_to_tank2"],
+			*tank1_state["direction_to_opponent"],
 			int(tank1_state["destroyed"]),
+			tank1_state["has_line_of_sight"],
 		]
 		tank1_bullet_features = []
 		for bullet in self.game.tank1.bullets:
@@ -83,14 +87,18 @@ class Agent:
 		while len(tank1_bullet_features) < self.max_bullets * 2:  # 2 attributes per bullet (x, y)
 			tank1_bullet_features.append(0)  # Pad with 0 if fewer bullets exist
 		tank2_features = [
-			tank2_state["x"] / self.game.SCREEN_WIDTH,
-			tank2_state["y"] / self.game.SCREEN_HEIGHT,
+			tank2_state["x_norm"],
+			tank2_state["y_norm"],
+			tank2_state["rel_dx"],
+			tank2_state["rel_dy"],
 			int(tank2_state["direction"] == "UP"),
 			int(tank2_state["direction"] == "DOWN"),
 			int(tank2_state["direction"] == "LEFT"),
 			int(tank2_state["direction"] == "RIGHT"),
 			tank2_state["distance_to_tank1"],
+			*tank2_state["direction_to_opponent"],
 			int(tank2_state["destroyed"]),
+			tank2_state["has_line_of_sight"],
 		]
 		tank2_bullet_features = []
 		for bullet in self.game.tank2.bullets:
@@ -310,8 +318,6 @@ class Agent:
 			if self.game.headless:
 				# Compute reward based on distance improvement
 				next_state = self.game.get_game_state()
-				old_dist = self.get_distance(self.previous_state)
-				new_dist = self.get_distance(next_state)
 				reward = self.compute_step_reward(self.previous_state, next_state)
 
 				done = self.game.check_done()
@@ -332,15 +338,21 @@ class Agent:
 
 	def get_distance(self, state=None):
 		if state:
-			tank_x = state["self"]["x"] + state["self"]["width"] / 2
-			tank_y = state["self"]["y"] + state["self"]["height"] / 2
-			opp_x = state["opponent"]["x"] + state["opponent"]["width"] / 2
-			opp_y = state["opponent"]["y"] + state["opponent"]["height"] / 2
+			# Figure out who is "self" and who is "opponent"
+			if self.agent_id == "agent1":
+				tank_data = state["tank1"]
+				opp_data = state["tank2"]
+			else:
+				tank_data = state["tank2"]
+				opp_data = state["tank1"]
+
+			tank_x = tank_data["x_norm"]
+			tank_y = tank_data["y_norm"]
+			opp_x = opp_data["x_norm"]
+			opp_y = opp_data["y_norm"]
 		else:
-			tank_x = self.tank.x + self.tank.width / 2
-			tank_y = self.tank.y + self.tank.height / 2
-			opp_x = self.opponent.x + self.opponent.width / 2
-			opp_y = self.opponent.y + self.opponent.height / 2
+			tank_x, tank_y = self.tank.get_normalized_xy_coordinates()
+			opp_x, opp_y = self.opponent.get_normalized_xy_coordinates()
 
 		dx = tank_x - opp_x
 		dy = tank_y - opp_y

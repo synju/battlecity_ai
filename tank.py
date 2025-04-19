@@ -2,6 +2,7 @@ import pygame
 
 from decision_point import DecisionPoint
 from bullet import Bullet
+import math
 
 
 class Tank:
@@ -30,9 +31,10 @@ class Tank:
 	def update(self):
 		self.update_bullets(self.game.map.bricks, self.game.map.steel_walls, self.game.map.eagles, self.game.tank2, self.opponent.bullets)
 		self.temp_decision_point = self.get_nearest_decision_point()
-		if self.temp_decision_point and self.temp_decision_point.get_index() != self.most_recent_decision_point.get_index():
+		if isinstance(self.temp_decision_point, DecisionPoint) and isinstance(self.most_recent_decision_point, DecisionPoint) and self.temp_decision_point.get_index() != self.most_recent_decision_point.get_index():
 			self.awaiting_decision = True
-			#print("Awaiting Decision")
+
+	# print("Awaiting Decision")
 
 	def draw(self):
 		if not self.destroyed:
@@ -220,4 +222,54 @@ class Tank:
 		for dp in self.game.map.decision_points:
 			if dp.is_near(tank_center_x, tank_center_y):
 				return dp
+		return False
+
+	def get_normalized_xy_coordinates(self):
+		center_x = self.x + self.width / 2
+		center_y = self.y + self.height / 2
+		norm_x = center_x / self.game.SCREEN_WIDTH
+		norm_y = center_y / self.game.SCREEN_HEIGHT
+		return norm_x, norm_y
+
+	def get_direction_to_opponent_onehot(self):
+		dx = self.opponent.x - self.x
+		dy = self.opponent.y - self.y
+		angle = math.degrees(math.atan2(-dy, dx)) % 360
+
+		directions = ['E', 'NE', 'N', 'NW', 'W', 'SW', 'S', 'SE']
+		sector = int((angle + 22.5) // 45) % 8
+		onehot = [1 if i == sector else 0 for i in range(8)]
+		return onehot
+
+	def has_line_of_sight_to_opponent(self):
+		x1, y1 = self.x + self.width // 2, self.y + self.height // 2
+		x2, y2 = self.opponent.x + self.opponent.width // 2, self.opponent.y + self.opponent.height // 2
+
+		# Only consider direct line-of-sight horizontally or vertically
+		if x1 == x2:
+			# Vertical check
+			step = 1 if y2 > y1 else -1
+			for y in range(int(y1), int(y2), int(step * self.game.TILE_SIZE)):
+				if self._obstacle_at(x1, y):
+					return 0.0
+			return 1.0
+
+		elif y1 == y2:
+			# Horizontal check
+			step = 1 if x2 > x1 else -1
+			for x in range(int(x1), int(x2), int(step * self.game.TILE_SIZE)):
+				if self._obstacle_at(x, y1):
+					return 0.0
+			return 1.0
+
+		return 0.0  # Not in a straight line
+
+	def _obstacle_at(self, x, y):
+		# Check for any wall or brick at this tile
+		for wall in self.game.map.bricks + self.game.map.steel_walls:
+			if wall.get("destroyed", False):
+				continue
+			wx, wy = wall["x"], wall["y"]
+			if wx <= x <= wx + self.game.TILE_SIZE and wy <= y <= wy + self.game.TILE_SIZE:
+				return True
 		return False

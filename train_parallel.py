@@ -1,4 +1,4 @@
-from multiprocessing import Process
+from multiprocessing import Process, freeze_support
 import time
 import os
 import subprocess  # ✅ to run the merge script after
@@ -13,6 +13,8 @@ def run_game_instance(instance_id, num_iterations=1):
 
 
 if __name__ == "__main__":
+	freeze_support()
+
 	num_instances = 50
 	iterations_per_batch = 5
 	total_iterations = 300

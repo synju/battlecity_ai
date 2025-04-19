@@ -85,23 +85,40 @@ class Game:
 		print(f"Iteration: {self.iteration}, Agent 1: {self.agent_points['agent_1']}, Agent 2: {self.agent_points['agent_2']}")
 
 	def get_game_state(self):
+		tank1_x_norm, tank1_y_norm = self.tank1.get_normalized_xy_coordinates()
+		tank2_x_norm, tank2_y_norm = self.tank2.get_normalized_xy_coordinates()
+
+		# Relative position (tank2 - tank1)
+		rel_dx_1 = tank2_x_norm - tank1_x_norm
+		rel_dy_1 = tank2_y_norm - tank1_y_norm
+		rel_dx_2 = -rel_dx_1
+		rel_dy_2 = -rel_dy_1
+
 		# Enhanced state to include distances, bullets, and threats
 		state = {
 			"tank1": {
-				"x": self.tank1.x,
-				"y": self.tank1.y,
+				"x_norm": tank1_x_norm,
+				"y_norm": tank1_y_norm,
+				"rel_dx": rel_dx_1,
+				"rel_dy": rel_dy_1,
 				"direction": self.tank1.direction,
 				"bullets": [{"x": bullet.x, "y": bullet.y} for bullet in self.tank1.bullets],
-				"distance_to_tank2": ((self.tank1.x - self.tank2.x) ** 2 + (self.tank1.y - self.tank2.y) ** 2) ** 0.5,
+				"distance_to_tank2": self.agent1.get_distance(),
+				"direction_to_opponent": self.tank1.get_direction_to_opponent_onehot(),
 				"destroyed": self.tank1.destroyed,
+				"has_line_of_sight": self.tank1.has_line_of_sight_to_opponent(),
 			},
 			"tank2": {
-				"x": self.tank2.x,
-				"y": self.tank2.y,
+				"x_norm": tank2_x_norm,
+				"y_norm": tank2_y_norm,
+				"rel_dx": rel_dx_2,
+				"rel_dy": rel_dy_2,
 				"direction": self.tank2.direction,
 				"bullets": [{"x": bullet.x, "y": bullet.y} for bullet in self.tank2.bullets],
-				"distance_to_tank1": ((self.tank2.x - self.tank1.x) ** 2 + (self.tank2.y - self.tank1.y) ** 2) ** 0.5,
+				"distance_to_tank1": self.agent2.get_distance(),
+				"direction_to_opponent": self.tank2.get_direction_to_opponent_onehot(),
 				"destroyed": self.tank2.destroyed,
+				"has_line_of_sight": self.tank2.has_line_of_sight_to_opponent(),
 			},
 			"eagles": [{"x": eagle["x"], "y": eagle["y"], "destroyed": eagle["destroyed"]} for eagle in self.map.eagles],
 			"bricks": [{"x": brick["x"], "y": brick["y"], "destroyed": brick["destroyed"]} for brick in self.map.bricks],
@@ -131,7 +148,8 @@ class Game:
 
 		# Setup Tanks
 		self.start_time = time.time()  # Reset start time when game starts
-		self.map = Map(self, os.path.join(os.path.dirname(__file__), "stages/stage0.txt"))
+		#self.map = Map(self, os.path.join(os.path.dirname(__file__), "stages/stage0.txt"))
+		self.map = Map(self, os.path.join(os.path.dirname(__file__), "stages/no-obstacles.txt"))
 		self.tanks = []
 		self.tank1 = Tank(self, *self.map.tank1_pos, self.tank1_images)
 		self.tank2 = Tank(self, *self.map.tank2_pos, self.tank2_images)
